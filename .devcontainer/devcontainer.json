@@ -1,0 +1,16 @@
+{
+  "name": "LoopGuard AI",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+  "postCreateCommand": "pip install fastapi uvicorn litellm sentence-transformers pgvector psycopg2-binary asyncpg opentelemetry-sdk arize-phoenix openinference-instrumentation-litellm deepeval pydantic locust requests",
+  "forwardPorts": [8000, 6006],
+  "portsAttributes": {
+    "8000": {
+      "label": "FastAPI Proxy",
+      "onAutoForward": "notify"
+    },
+    "6006": {
+      "label": "Arize Phoenix",
+      "onAutoForward": "notify"
+    }
+  }
+}
