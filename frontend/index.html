@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LoopGuard AI</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap');
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #080b0f;
+    --surface: #0d1117;
+    --surface2: #131920;
+    --border: rgba(255,255,255,0.06);
+    --border-strong: rgba(255,255,255,0.12);
+    --text: #c9d1d9;
+    --muted: #4a5568;
+    --accent: #00e5a0;
+    --accent-dim: rgba(0,229,160,0.08);
+    --danger: #ff4d4d;
+    --danger-dim: rgba(255,77,77,0.08);
+    --warn: #f5a623;
+    --info: #4d9fff;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  html, body { height: 100%; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    height: 44px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: #fff;
+  }
+
+  .brand-icon {
+    width: 22px; height: 22px;
+    background: var(--accent);
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .brand-icon svg { width: 13px; height: 13px; }
+
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+
+  .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: blink 2s ease-in-out infinite;
+  }
+
+  .dot.dead { background: var(--danger); animation: none; }
+
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+  .trip-bar {
+    background: var(--danger);
+    color: #fff;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    padding: 8px 20px;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid rgba(255,77,77,0.4);
+  }
+
+  .trip-bar::before {
+    content: '';
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #fff;
+    flex-shrink: 0;
+  }
+
+  .main {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    grid-template-rows: auto 1fr;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .metrics-row {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .metric {
+    padding: 16px 20px;
+    border-right: 1px solid var(--border);
+    position: relative;
+  }
+
+  .metric:last-child { border-right: none; }
+
+  .metric-label {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .metric-val {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--accent);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .metric-val.danger { color: var(--danger); }
+  .metric-val.warn { color: var(--warn); }
+  .metric-val.neutral { color: var(--text); }
+
+  .metric-sub {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 5px;
+  }
+
+  .metric-bar-track {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--border);
+  }
+
+  .metric-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.5s ease;
+  }
+
+  .metric-bar-fill.danger { background: var(--danger); }
+
+  .left-panel {
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .panel-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  .panel-header-count {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 6px;
+    font-size: 10px;
+    color: var(--accent);
+  }
+
+  .log-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+  }
+
+  .log-container::-webkit-scrollbar { width: 3px; }
+  .log-container::-webkit-scrollbar-track { background: transparent; }
+  .log-container::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
+
+  .log-entry {
+    display: grid;
+    grid-template-columns: 80px 48px 1fr;
+    gap: 0;
+    padding: 7px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    line-height: 1.4;
+    align-items: start;
+    transition: background 0.15s;
+  }
+
+  .log-entry:hover { background: var(--surface2); }
+
+  .log-entry.trip {
+    background: var(--danger-dim);
+    border-left: 2px solid var(--danger);
+    padding-left: 14px;
+  }
+
+  .log-entry.ok {
+    border-left: 2px solid transparent;
+  }
+
+  .log-time { color: var(--muted); font-size: 10px; padding-top: 1px; }
+
+  .log-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 3px;
+    letter-spacing: 0.03em;
+  }
+
+  .badge-200 { background: rgba(0,229,160,0.12); color: var(--accent); }
+  .badge-500 { background: rgba(245,166,35,0.12); color: var(--warn); }
+  .badge-423 { background: rgba(255,77,77,0.15); color: var(--danger); }
+
+  .log-msg { color: var(--text); padding-left: 10px; }
+  .log-sim { color: var(--muted); font-size: 10px; }
+
+  .right-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .chart-area {
+    flex: 1;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .chart-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .chart-tab {
+    padding: 10px 16px;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    border-right: 1px solid var(--border);
+    background: none;
+    font-family: var(--mono);
+  }
+
+  .chart-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  .chart-tab:hover:not(.active) { color: var(--text); background: var(--surface2); }
+
+  .chart-wrapper {
+    flex: 1;
+    padding: 16px 20px;
+    position: relative;
+    min-height: 0;
+  }
+
+  .chart-wrapper canvas { max-height: 100% !important; }
+
+  .eval-panel {
+    border-top: 1px solid var(--border);
+    padding: 18px 20px;
+    background: var(--surface);
+    display: none;
+    flex-shrink: 0;
+  }
+
+  .eval-panel-label {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .eval-verdict {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .eval-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .eval-json {
+    color: var(--text);
+    font-size: 11px;
+    line-height: 1.6;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px 12px;
+  }
+
+  .eval-metrics-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    align-content: start;
+  }
+
+  .eval-metric-chip {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px 10px;
+  }
+
+  .eval-metric-chip-label {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .eval-metric-chip-val {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .eval-metric-chip-val.danger { color: var(--danger); }
+  .eval-metric-chip-val.warn { color: var(--warn); }
+
+  .bottom-strip {
+    border-top: 1px solid var(--border);
+    padding: 8px 20px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    flex-shrink: 0;
+    background: var(--surface);
+  }
+
+  .strip-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+
+  .strip-val {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .strip-divider {
+    width: 1px; height: 14px;
+    background: var(--border-strong);
+  }
+
+  .empty-log {
+    padding: 32px 16px;
+    color: var(--muted);
+    font-size: 11px;
+    text-align: center;
+    line-height: 2;
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-icon">
+      <svg viewBox="0 0 13 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M6.5 1L11 4V9L6.5 12L2 9V4L6.5 1Z" stroke="#080b0f" stroke-width="1.5" stroke-linejoin="round"/>
+        <circle cx="6.5" cy="6.5" r="1.5" fill="#080b0f"/>
+      </svg>
+    </div>
+    LOOPGUARD
+  </div>
+  <div class="topbar-right">
+    <div class="pill"><div class="dot" id="statusDot"></div><span id="statusText">MONITORING</span></div>
+    <div class="pill" id="clockDisplay">—</div>
+  </div>
+</div>
+
+<div class="trip-bar" id="tripBar">
+  CIRCUIT BREAKER OPEN — LOOP DETECTED — DOWNSTREAM REQUESTS REJECTED
+</div>
+
+<div class="main">
+
+  <div class="metrics-row">
+    <div class="metric">
+      <div class="metric-label">Total Calls</div>
+      <div class="metric-val neutral" id="mTotal">0</div>
+      <div class="metric-sub">session</div>
+      <div class="metric-bar-track"><div class="metric-bar-fill" id="bTotal" style="width:0%"></div></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">HTTP 200</div>
+      <div class="metric-val" id="mOk">0</div>
+      <div class="metric-sub">successful</div>
+      <div class="metric-bar-track"><div class="metric-bar-fill" id="bOk" style="width:0%"></div></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">HTTP 500</div>
+      <div class="metric-val warn" id="mFail">0</div>
+      <div class="metric-sub">upstream error</div>
+      <div class="metric-bar-track"><div class="metric-bar-fill danger" id="bFail" style="width:0%"></div></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Trips Fired</div>
+      <div class="metric-val danger" id="mTrips">0</div>
+      <div class="metric-sub">breaker events</div>
+      <div class="metric-bar-track"><div class="metric-bar-fill danger" id="bTrips" style="width:0%"></div></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Tokens Saved</div>
+      <div class="metric-val" id="mTokens">0</div>
+      <div class="metric-sub">est. ~2500/trip</div>
+      <div class="metric-bar-track"><div class="metric-bar-fill" id="bTokens" style="width:0%"></div></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Detection Rate</div>
+      <div class="metric-val" id="mRate">—</div>
+      <div class="metric-sub">of failure runs</div>
+      <div class="metric-bar-track"><div class="metric-bar-fill" id="bRate" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <div class="left-panel">
+    <div class="panel-header">
+      Request Log
+      <span class="panel-header-count" id="logCount">0</span>
+    </div>
+    <div class="log-container" id="logContainer">
+      <div class="empty-log" id="emptyMsg">Awaiting requests...<br><span style="color:#2a3340">connect your eval to /stream</span></div>
+    </div>
+  </div>
+
+  <div class="right-panel">
+    <div class="chart-tabs">
+      <button class="chart-tab active" onclick="switchTab('rate',this)">Call Rate</button>
+      <button class="chart-tab" onclick="switchTab('status',this)">Status Mix</button>
+      <button class="chart-tab" onclick="switchTab('sim',this)">Similarity</button>
+    </div>
+    <div class="chart-area">
+      <div class="chart-wrapper">
+        <canvas id="mainChart"></canvas>
+      </div>
+    </div>
+
+    <!-- EVALUATION PANEL -->
+    <div class="eval-panel" id="evalPanel">
+      <div class="eval-panel-label">Latest Evaluation</div>
+      <div class="eval-verdict" id="evalVerdict"></div>
+      <div class="eval-body">
+        <pre class="eval-json" id="evalJson"></pre>
+        <div class="eval-metrics-grid" id="evalMetricsGrid"></div>
+      </div>
+    </div>
+
+    <div class="bottom-strip">
+      <div class="strip-item">SESSION <span class="strip-val" id="sSession">eval_loop_test_001</span></div>
+      <div class="strip-divider"></div>
+      <div class="strip-item">MODEL <span class="strip-val">deepseek/deepseek-chat</span></div>
+      <div class="strip-divider"></div>
+      <div class="strip-item">AVG LATENCY <span class="strip-val" id="sLatency">—</span></div>
+      <div class="strip-divider"></div>
+      <div class="strip-item">P95 <span class="strip-val" id="sP95">—</span></div>
+      <div class="strip-divider"></div>
+      <div class="strip-item">WINDOW <span class="strip-val">3 failures</span></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+Chart.defaults.color = '#4a5568';
+Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';
+
+let state = {
+  total: 0, ok: 0, fail: 0, trips: 0,
+  tokens: 0, logCount: 0,
+  latencies: [],
+  tripped: false,
+  activeTab: 'rate'
+};
+
+const cfg = {
+  rate: {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        label: 'Cumulative calls',
+        data: [],
+        borderColor: '#00e5a0',
+        backgroundColor: 'rgba(0,229,160,0.04)',
+        borderWidth: 1.5,
+        pointRadius: 3,
+        pointBackgroundColor: '#00e5a0',
+        tension: 0.2,
+        fill: true
+      }]
+    },
+    options: chartOptions()
+  },
+  status: {
+    type: 'bar',
+    data: {
+      labels: ['HTTP 200', 'HTTP 500', 'HTTP 423'],
+      datasets: [{
+        label: 'Count',
+        data: [0, 0, 0],
+        backgroundColor: ['rgba(0,229,160,0.7)', 'rgba(245,166,35,0.7)', 'rgba(255,77,77,0.7)'],
+        borderColor: ['#00e5a0', '#f5a623', '#ff4d4d'],
+        borderWidth: 1,
+        borderRadius: 2
+      }]
+    },
+    options: chartOptions()
+  },
+  sim: {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        label: 'Semantic similarity',
+        data: [],
+        borderColor: '#4d9fff',
+        backgroundColor: 'rgba(77,159,255,0.04)',
+        borderWidth: 1.5,
+        pointRadius: 3,
+        pointBackgroundColor: '#4d9fff',
+        tension: 0.2,
+        fill: true
+      }, {
+        label: 'Trip threshold',
+        data: [],
+        borderColor: 'rgba(255,77,77,0.5)',
+        borderWidth: 1,
+        borderDash: [4,3],
+        pointRadius: 0,
+        fill: false
+      }]
+    },
+    options: chartOptions()
+  }
+};
+
+function chartOptions() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 300 },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#0d1117',
+        borderColor: 'rgba(255,255,255,0.1)',
+        borderWidth: 1,
+        titleColor: '#c9d1d9',
+        bodyColor: '#4a5568',
+        titleFont: { family: "'IBM Plex Mono'" },
+        bodyFont: { family: "'IBM Plex Mono'" }
+      }
+    },
+    scales: {
+      x: { ticks: { font: { family: "'IBM Plex Mono'", size: 10 }, color: '#4a5568' }, grid: { color: 'rgba(255,255,255,0.03)' } },
+      y: { ticks: { font: { family: "'IBM Plex Mono'", size: 10 }, color: '#4a5568' }, grid: { color: 'rgba(255,255,255,0.03)' } }
+    }
+  };
+}
+
+let chart = new Chart(document.getElementById('mainChart'), cfg[state.activeTab]);
+
+function switchTab(tab, btn) {
+  document.querySelectorAll('.chart-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.activeTab = tab;
+  chart.destroy();
+  chart = new Chart(document.getElementById('mainChart'), cfg[tab]);
+}
+
+function fmt(t) {
+  return new Date(t).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function updateMetrics() {
+  const t = state.total;
+  document.getElementById('mTotal').textContent = t;
+  document.getElementById('mOk').textContent = state.ok;
+  document.getElementById('mFail').textContent = state.fail;
+  document.getElementById('mTrips').textContent = state.trips;
+  document.getElementById('mTokens').textContent = state.tokens.toLocaleString();
+
+  const rate = t > 0 ? Math.round((state.trips / Math.max(state.fail, 1)) * 100) : null;
+  document.getElementById('mRate').textContent = rate !== null ? rate + '%' : '—';
+
+  document.getElementById('bOk').style.width = t > 0 ? Math.round((state.ok/t)*100)+'%' : '0%';
+  document.getElementById('bFail').style.width = t > 0 ? Math.round((state.fail/t)*100)+'%' : '0%';
+  document.getElementById('bTrips').style.width = state.trips > 0 ? '100%' : '0%';
+  document.getElementById('bRate').style.width = rate !== null ? rate+'%' : '0%';
+  document.getElementById('logCount').textContent = state.logCount;
+
+  if (state.latencies.length > 0) {
+    const avg = Math.round(state.latencies.reduce((a,b) => a+b, 0) / state.latencies.length);
+    const sorted = [...state.latencies].sort((a,b) => a-b);
+    const p95 = sorted[Math.max(0, Math.floor(sorted.length * 0.95) - 1)];
+    document.getElementById('sLatency').textContent = avg + 'ms';
+    document.getElementById('sP95').textContent = Math.round(p95) + 'ms';
+  }
+}
+
+function addLogEntry(type, data) {
+  const container = document.getElementById('logContainer');
+  const empty = document.getElementById('emptyMsg');
+  if (empty) empty.remove();
+
+  state.logCount++;
+  const t = fmt(Date.now());
+
+  let badge, msg, extraClass = '';
+  if (type === 'success') {
+    badge = '<span class="log-badge badge-200">200</span>';
+    msg = `${data.session || 'session'} <span class="log-sim">sim=${(data.sim||0).toFixed(3)}</span>`;
+    extraClass = 'ok';
+  } else if (type === 'fail') {
+    badge = '<span class="log-badge badge-500">500</span>';
+    msg = `${data.session || 'session'} <span class="log-sim">upstream error</span>`;
+    extraClass = 'ok';
+  } else if (type === 'trip') {
+    badge = '<span class="log-badge badge-423">423</span>';
+    msg = `<strong style="color:#ff4d4d">${data.session || 'session'}</strong> <span class="log-sim">BREAKER OPEN · sim=${(data.sim||0).toFixed(4)}</span>`;
+    extraClass = 'trip';
+  }
+
+  const el = document.createElement('div');
+  el.className = `log-entry ${extraClass}`;
+  el.innerHTML = `<span class="log-time">${t}</span>${badge}<span class="log-msg">${msg}</span>`;
+  container.insertBefore(el, container.firstChild);
+}
+
+function renderEvalPanel(payload) {
+  const panel = document.getElementById('evalPanel');
+  panel.style.display = 'block';
+
+  let parsed = payload.evaluation;
+  try {
+    parsed = JSON.parse(
+      (typeof payload.evaluation === 'string'
+        ? payload.evaluation
+        : JSON.stringify(payload.evaluation)
+      ).replace(/```json|```/g, '').trim()
+    );
+  } catch(e) {}
+
+  const verdictEl = document.getElementById('evalVerdict');
+  const verdict = (parsed && parsed.verdict) ? parsed.verdict : 'UNKNOWN';
+  verdictEl.textContent = verdict;
+  verdictEl.style.color = verdict === 'PASS' ? '#00e5a0' : '#ff4d4d';
+
+  // Left: reasoning + flags as JSON
+  document.getElementById('evalJson').textContent = JSON.stringify({
+    verdict: parsed.verdict || '—',
+    reasoning: parsed.reasoning || '—',
+    trip_detected: parsed.trip_detected ?? '—',
+    correct_trigger_window: parsed.correct_trigger_window ?? '—'
+  }, null, 2);
+
+  // Right: numeric metrics chips
+  const m = payload.metrics || {};
+  const lat = m.latency || {};
+  const chips = [
+    { label: 'Total Requests', val: m.total_requests_sent ?? '—', cls: '' },
+    { label: 'HTTP 200', val: m.successful_requests ?? '—', cls: '' },
+    { label: 'HTTP 500', val: m.failed_requests_500 ?? '—', cls: 'warn' },
+    { label: 'Trips', val: m.blocked_requests_423 ?? '—', cls: 'danger' },
+    { label: 'Loop Prevention', val: m.loop_prevention_rate_pct != null ? m.loop_prevention_rate_pct + '%' : '—', cls: '' },
+    { label: 'Failure Detection', val: m.failure_detection_rate_pct != null ? m.failure_detection_rate_pct + '%' : '—', cls: '' },
+    { label: 'Avg Latency', val: lat.avg_per_request_ms != null ? lat.avg_per_request_ms + 'ms' : '—', cls: '' },
+    { label: 'P95 Latency', val: lat.p95_ms != null ? lat.p95_ms + 'ms' : '—', cls: '' },
+  ];
+
+  const grid = document.getElementById('evalMetricsGrid');
+  grid.innerHTML = chips.map(c => `
+    <div class="eval-metric-chip">
+      <div class="eval-metric-chip-label">${c.label}</div>
+      <div class="eval-metric-chip-val ${c.cls}">${c.val}</div>
+    </div>
+  `).join('');
+}
+
+function handleEvent(d) {
+  // Evaluation event — render panel and return early
+  if (d.type === 'evaluation') {
+    renderEvalPanel(d.payload);
+    return;
+  }
+
+  const now = fmt(Date.now());
+  state.total++;
+
+  if (d.type === 'success') {
+    state.ok++;
+    addLogEntry('success', d);
+    cfg.rate.data.labels.push(now);
+    cfg.rate.data.datasets[0].data.push(state.total);
+    cfg.status.data.datasets[0].data[0] = state.ok;
+    if (d.sim != null) {
+      cfg.sim.data.labels.push(now);
+      cfg.sim.data.datasets[0].data.push(+(d.sim).toFixed(3));
+      cfg.sim.data.datasets[1].data.push(0.85);
+    }
+    if (d.latency_ms) state.latencies.push(d.latency_ms);
+  } else if (d.type === 'fail') {
+    state.fail++;
+    addLogEntry('fail', d);
+    cfg.rate.data.labels.push(now);
+    cfg.rate.data.datasets[0].data.push(state.total);
+    cfg.status.data.datasets[0].data[1] = state.fail;
+    if (d.latency_ms) state.latencies.push(d.latency_ms);
+  } else if (d.type === 'trip') {
+    state.trips++;
+    state.tokens += 2500;
+    addLogEntry('trip', d);
+    cfg.rate.data.labels.push(now);
+    cfg.rate.data.datasets[0].data.push(state.total);
+    cfg.status.data.datasets[0].data[2]++;
+    if (d.sim != null) {
+      cfg.sim.data.labels.push(now);
+      cfg.sim.data.datasets[0].data.push(+(d.sim).toFixed(4));
+      cfg.sim.data.datasets[1].data.push(0.85);
+    }
+    if (d.latency_ms) state.latencies.push(d.latency_ms);
+
+    if (!state.tripped) {
+      state.tripped = true;
+      document.getElementById('tripBar').style.display = 'flex';
+      document.getElementById('statusDot').className = 'dot dead';
+      document.getElementById('statusText').textContent = 'BREAKER OPEN';
+    }
+  }
+
+  if (state.activeTab === 'rate') { chart.data = cfg.rate.data; chart.update('none'); }
+  else if (state.activeTab === 'status') { chart.data = cfg.status.data; chart.update('none'); }
+  else if (state.activeTab === 'sim') { chart.data = cfg.sim.data; chart.update('none'); }
+
+  updateMetrics();
+}
+
+setInterval(() => {
+  document.getElementById('clockDisplay').textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
+}, 1000);
+
+const source = new EventSource("/stream");
+source.onmessage = e => {
+  try { handleEvent(JSON.parse(e.data)); } catch(err) {}
+};
+source.onerror = () => {
+  document.getElementById('statusDot').className = 'dot dead';
+  document.getElementById('statusText').textContent = 'DISCONNECTED';
+};
+</script>
+</body>
+</html>
