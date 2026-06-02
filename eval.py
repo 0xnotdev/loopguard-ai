@@ -51,7 +51,10 @@ LOOP_PAYLOAD = {
 
 def run_loop_simulation():
 
-    url = "http://localhost:8000/proxy"
+
+    url = "https://loopguard-ai.onrender.com/proxy"
+
+
 
     results = []
 
@@ -68,7 +71,7 @@ def run_loop_simulation():
         resp = requests.post(
             url,
             json=LOOP_PAYLOAD,
-            timeout=30
+            timeout=120
         )
 
         req_latency = (
@@ -362,7 +365,7 @@ def main():
 
     # Push evaluation to frontend dashboard
     requests.post(
-        "http://localhost:8000/eval-result",
+        "https://loopguard-ai.onrender.com/eval-result",
         json={
             "results": results,
             "metrics": metrics,
