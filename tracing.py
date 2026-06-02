@@ -1,35 +1,36 @@
-import os
-from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 
-from openinference.instrumentation.litellm import LiteLLMInstrumentor
+try:
+
+    from arize.otel import register
+    from openinference.instrumentation.litellm import (
+        LiteLLMInstrumentor
+    )
+    from opentelemetry import trace
+
+    PHOENIX_ENABLED = True
+
+except Exception:
+
+    PHOENIX_ENABLED = False
 
 
 def setup_tracing():
 
-    # Local Phoenix collector endpoint
-    os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "http://localhost:6006"
+    if not PHOENIX_ENABLED:
 
-    tracer_provider = TracerProvider()
+        print("Phoenix disabled in production")
 
-    tracer_provider.add_span_processor(
-        BatchSpanProcessor(
-            OTLPSpanExporter(
-                endpoint="http://localhost:6006/v1/traces"
-            )
-        )
+        return None
+
+    tracer_provider = register(
+        project_name="loopguard_ai"
     )
 
-    trace.set_tracer_provider(tracer_provider)
-
-    # Auto-instrument LiteLLM
     LiteLLMInstrumentor().instrument(
         tracer_provider=tracer_provider
     )
 
-    print("✓ Local Phoenix tracing initialized")
+    print("✓ Phoenix tracing initialized")
 
     return trace.get_tracer(__name__)
 
@@ -42,6 +43,9 @@ def inject_deadlock_span(
     similarity: float,
     tokens_saved: int
 ):
+
+    if not tracer:
+        return
 
     with tracer.start_as_current_span(
         "FaultType.DEADLOCK_INJECTION"
