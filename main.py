@@ -52,7 +52,7 @@ async def startup():
     global db_pool, event_queue
 
     # TEMPORARILY DISABLED
-    # db_pool = await get_pool()
+    db_pool = await get_pool()
 
     event_queue = asyncio.Queue()
 
