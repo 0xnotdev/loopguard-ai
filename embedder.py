@@ -1,26 +1,37 @@
+
 from sentence_transformers import SentenceTransformer
-import functools
 
-@functools.lru_cache(maxsize=1)
+model = None
+
+
 def get_model():
-    # Loads once into RAM — 43MB, ~15ms encode time afterward
-    return SentenceTransformer('all-MiniLM-L6-v2')
 
-def embed_request(messages: list) -> list:
+    global model
+
+    if model is None:
+
+        print("Loading embedding model...")
+
+        model = SentenceTransformer(
+            "sentence-transformers/all-MiniLM-L6-v2"
+        )
+
+        print("✓ Embedding model loaded")
+
+    return model
+
+
+def embed_request(messages):
+
     model = get_model()
 
-    # Walk messages in reverse to find most recent agent action
-    latest_content = ""
+    combined = " ".join(
+        msg["content"]
+        for msg in messages
+        if "content" in msg
+    )
 
-    for msg in reversed(messages):
-        latest_content += str(msg.get("content", ""))
+    embedding = model.encode(combined)
 
-        if "tool_calls" in msg:
-            # Include tool execution arguments
-            latest_content += str(msg["tool_calls"])
-            break
+    return embedding.tolist()
 
-    # Convert numpy array -> normal Python list
-    embedding = model.encode(latest_content).tolist()
-
-    return embedding
