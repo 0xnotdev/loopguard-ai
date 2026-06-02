@@ -6,7 +6,7 @@ pgvector==0.3.2
 psycopg2-binary==2.9.9
 asyncpg==0.29.0
 opentelemetry-sdk==1.25.0
-arize-phoenix==4.5.0
+arize-phoenix==16.5.0
 openinference-instrumentation-litellm==0.1.4
 pydantic==2.7.1
 locust==2.29.0
