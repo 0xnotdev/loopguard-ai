@@ -46,12 +46,17 @@ db_pool = None
 event_queue: asyncio.Queue = None
 
 
-@app.on_event("startup")  # keeping for broad compat; swap to lifespan if on FastAPI ≥0.93
+@app.on_event("startup")
 async def startup():
+
     global db_pool, event_queue
-    db_pool = await get_pool()
+
+    # TEMPORARILY DISABLED
+    # db_pool = await get_pool()
+
     event_queue = asyncio.Queue()
-    print("✓ Database pool initialized")
+
+    print("✓ Startup complete")
 
 
 @app.get("/health")
