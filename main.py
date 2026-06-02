@@ -1,3 +1,4 @@
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -42,25 +43,48 @@ app.add_middleware(
 )
 
 db_pool = None
-
 event_queue: asyncio.Queue = None
 
 
 @app.on_event("startup")
 async def startup():
 
-    global db_pool, event_queue
-
-    # TEMPORARILY DISABLED
-    db_pool = await get_pool()
+    global event_queue
 
     event_queue = asyncio.Queue()
 
     print("✓ Startup complete")
 
+
+@app.get("/")
+async def root():
+
+    return {
+        "message": "LoopGuard AI backend is live"
+    }
+
+
 @app.get("/health")
 async def health():
-    return {"status": "alive"}
+
+    return {
+        "status": "alive"
+    }
+
+
+async def get_db_pool_lazy():
+
+    global db_pool
+
+    if db_pool is None:
+
+        print("Initializing database pool...")
+
+        db_pool = await get_pool()
+
+        print("✓ Database pool initialized")
+
+    return db_pool
 
 
 @app.post("/proxy")
@@ -69,23 +93,27 @@ async def proxy_endpoint(req: ProxyRequest):
     request_start = time.perf_counter()
 
     try:
+
         # Step 1: Semantic embedding generation
         embedding = embed_request(req.messages)
 
-        # Step 2: Store + compare in pgvector
+        # Step 2: Lazy DB initialization
+        pool = await get_db_pool_lazy()
+
+        # Step 3: Store + compare in pgvector
         max_sim = await upsert_and_check_similarity(
-            db_pool,
+            pool,
             req.session_id,
             embedding
         )
 
-        # Step 3: Circuit breaker evaluation
+        # Step 4: Circuit breaker evaluation
         evaluate_circuit(
             req.session_id,
             max_sim
         )
 
-        # Step 4: Forward request to OpenRouter via LiteLLM
+        # Step 5: Forward request to OpenRouter via LiteLLM
         response = await litellm.acompletion(
             model=f"openrouter/{req.model}",
             messages=req.messages,
@@ -93,7 +121,9 @@ async def proxy_endpoint(req: ProxyRequest):
             base_url="https://openrouter.ai/api/v1"
         )
 
-        latency_ms = (time.perf_counter() - request_start) * 1000
+        latency_ms = (
+            time.perf_counter() - request_start
+        ) * 1000
 
         await event_queue.put({
             "type": "success",
@@ -106,7 +136,9 @@ async def proxy_endpoint(req: ProxyRequest):
 
     except LoopDetectedError as e:
 
-        latency_ms = (time.perf_counter() - request_start) * 1000
+        latency_ms = (
+            time.perf_counter() - request_start
+        ) * 1000
 
         inject_deadlock_span(
             e.session_id,
@@ -128,7 +160,9 @@ async def proxy_endpoint(req: ProxyRequest):
 
     except Exception as e:
 
-        latency_ms = (time.perf_counter() - request_start) * 1000
+        latency_ms = (
+            time.perf_counter() - request_start
+        ) * 1000
 
         print("ERROR:", str(e))
 
@@ -145,13 +179,17 @@ async def proxy_endpoint(req: ProxyRequest):
 
 
 async def sse_generator():
+
     while True:
+
         event = await event_queue.get()
+
         yield f"data: {json.dumps(event)}\n\n"
 
 
 @app.get("/stream")
 async def stream_events():
+
     return StreamingResponse(
         sse_generator(),
         media_type="text/event-stream"
@@ -160,16 +198,28 @@ async def stream_events():
 
 @app.post("/eval-result")
 async def receive_eval_result(payload: dict):
+
     await event_queue.put({
         "type": "evaluation",
         "payload": payload
     })
-    return {"status": "received"}
+
+    return {
+        "status": "received"
+    }
 
 
 @app.post("/reset/{session_id}")
 async def reset_circuit(session_id: str):
+
     if session_id in states:
-        states[session_id]["state"] = CircuitBreakerState.HALF_OPEN
+
+        states[session_id]["state"] = (
+            CircuitBreakerState.HALF_OPEN
+        )
+
         states[session_id]["count"] = 0
-    return {"message": f"Session {session_id} reset to HALF_OPEN"}
+
+    return {
+        "message": f"Session {session_id} reset to HALF_OPEN"
+    }
