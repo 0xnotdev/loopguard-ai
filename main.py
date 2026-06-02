@@ -58,7 +58,6 @@ async def startup():
 
     print("✓ Startup complete")
 
-
 @app.get("/health")
 async def health():
     return {"status": "alive"}
